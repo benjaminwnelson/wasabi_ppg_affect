@@ -516,7 +516,6 @@ ggstatsplot::ggwithinstats(
   pairwise.comparisons = TRUE
 )
 
-
 #Stress
 ggstatsplot::ggwithinstats(
   data = data_long1,
