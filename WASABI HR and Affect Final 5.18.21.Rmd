@@ -600,7 +600,8 @@ data_long3 <- bmlm::isolate(data_long2, by = "SID",
              which = "both")
 ```
 
-##HR Predicting Stress- Model 1 random intercepts and fixed slope
+##Stress Models
+###HR Predicting Stress- Model 1 random intercepts and fixed slope
 ```{r}
 hr_stress_model_win1 <- lmer(vasstress_win ~ 1 + hr_win_cb + hr_win_cw + BDIScore_win + GAD7Score_win + ConditionLabel + Gender + (1 | SID), REML = TRUE, data = data_long3)
 summary(hr_stress_model_win1)
@@ -618,7 +619,7 @@ ICClmer(hr_stress_model_win1)
 REplot(hr_stress_model_win1)
 ```
 
-##HR Predicting Stress- Model 2 random intercepts and random slope
+###HR Predicting Stress- Model 2 random intercepts and random slope
 ```{r}
 hr_stress_model_win2 <- lmer(vasstress_win ~ 1 + hr_win_cb + hr_win_cw + BDIScore_win + GAD7Score_win + ConditionLabel + Gender + (1 + hr_win_cw | SID), REML = TRUE, data = data_long3)
 summary(hr_stress_model_win2)
@@ -640,35 +641,70 @@ REplot(hr_stress_model_win2)
 ```{r}
 data_long3_compare <- na.omit(data_long3)
 
-hr_stress_model_unconditional_compare <- lmer(vasstress ~ 1 + (1| SID), REML = TRUE, data = data_long3_compare)
+hr_stress_model_unconditional_compare <- lmer(vasstress_win ~ 1 + (1| SID), REML = TRUE, data = data_long3_compare)
 
 hr_stress_model1_compare <- lmer(vasstress_win ~ 1 + hr_win_cb + hr_win_cw + BDIScore_win + GAD7Score_win + ConditionLabel + Gender + (1 | SID), REML = TRUE, data = data_long3_compare)
 
 #These two models are equivalent
-hr_stress_model2_compare <- lmer(vasstress ~ 1 + hr_cb + hr_cw + BDIScore + GAD7Score + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long3_compare)
+hr_stress_model2_compare <- lmer(vasstress_win ~ 1 + hr_win_cb + hr_win_cw + BDIScore_win + GAD7Score_win + ConditionLabel + Gender + (1 + hr_win_cw | SID), REML = TRUE, data = data_long3_compare, control = lmerControl(optimizer ="Nelder_Mead"))
 
 #Compare Models
 anova(hr_stress_model_unconditional_compare, hr_stress_model1_compare, hr_stress_model2_compare)
 ```
 
-
-##HR Predicting Anxiety
+##Anxiety Models
+###HR Predicting Stress- Model 1 random intercepts and fixed slope
 ```{r}
-hr_anxiety_model_win <- lmer(vasanxiety ~ 1 + hr_win_cb + hr_win_cw + BDIScore_win + GAD7Score_win + ConditionLabel + Gender + (1 + hr_win_cw | SID), REML = TRUE, data = data_long3)
-summary(hr_anxiety_model_win)
-confint(hr_anxiety_model_win)
-performance::check_convergence(hr_anxiety_model_win) #converged okay
-performance::check_singularity(hr_anxiety_model_win) #is not singular
-performance::r2(hr_anxiety_model_win)
-performance::icc(hr_anxiety_model_win)
-ggstatsplot::ggcoefstats(hr_anxiety_model_win)
-performance::check_model(hr_anxiety_model_win)
-performance::model_performance(hr_anxiety_model_win)
+hr_anxiety_model_win1 <- lmer(vasstress_win ~ 1 + hr_win_cb + hr_win_cw + BDIScore_win + GAD7Score_win + ConditionLabel + Gender + (1 | SID), REML = TRUE, data = data_long3)
+summary(hr_anxiety_model_win1)
+confint(hr_anxiety_model_win1)
+performance::check_convergence(hr_anxiety_model_win1) #converged okay
+performance::check_singularity(hr_anxiety_model_win1) #is not singular
+performance::r2(hr_anxiety_model_win1)
+performance::icc(hr_anxiety_model_win1)
+ggstatsplot::ggcoefstats(hr_anxiety_model_win1)
+performance::check_model(hr_anxiety_model_win1)
+performance::model_performance(hr_anxiety_model_win1)
+FElmer(hr_anxiety_model_win1)
+FEplot(hr_anxiety_model_win1)
+ICClmer(hr_anxiety_model_win1)
+REplot(hr_anxiety_model_win1)
+```
+
+###HR Predicting Stress- Model 2 random intercepts and random slope
+```{r}
+hr_anxiety_model_win2 <- lmer(vasstress_win ~ 1 + hr_win_cb + hr_win_cw + BDIScore_win + GAD7Score_win + ConditionLabel + Gender + (1 + hr_win_cw | SID), REML = TRUE, data = data_long3, control = lmerControl(optimizer ="Nelder_Mead"))
+summary(hr_anxiety_model_win2)
+confint(hr_anxiety_model_win2)
+performance::check_convergence(hr_anxiety_model_win2) #converged okay
+performance::check_singularity(hr_anxiety_model_win2) #is not singular
+performance::r2(hr_anxiety_model_win2)
+performance::icc(hr_anxiety_model_win2)
+ggstatsplot::ggcoefstats(hr_anxiety_model_win2)
+performance::check_model(hr_anxiety_model_win2)
+performance::model_performance(hr_anxiety_model_win2)
+FElmer(hr_anxiety_model_win2)
+FEplot(hr_anxiety_model_win2)
+ICClmer(hr_anxiety_model_win2)
+REplot(hr_anxiety_model_win2)
+```
+
+###Compare Models
+```{r}
+hr_anxiety_model_unconditional_compare <- lmer(vasanxiety_win ~ 1 + (1| SID), REML = TRUE, data = data_long3_compare)
+
+hr_anxiety_model1_compare <- lmer(vasanxiety_win ~ 1 + hr_win_cb + hr_win_cw + BDIScore_win + GAD7Score_win + ConditionLabel + Gender + (1 | SID), REML = TRUE, data = data_long3_compare)
+
+#These two models are equivalent
+hr_anxiety_model2_compare <- lmer(vasanxiety_win ~ 1 + hr_win_cb + hr_win_cw + BDIScore_win + GAD7Score_win + ConditionLabel + Gender + (1 + hr_win_cw | SID), REML = TRUE, data = data_long3_compare, control = lmerControl(optimizer ="Nelder_Mead"))
+
+#Compare Models
+anova(hr_anxiety_model_unconditional_compare, hr_anxiety_model1_compare, hr_anxiety_model2_compare)
 ```
 
 ##Create Table
 ```{r}
-tab_model(hr_stress_model_win, hr_anxiety_model_win,
+tab_model(hr_stress_model_win2, hr_anxiety_model_win2,
           dv.labels = c("Stress Model Winsorized", "Anxiety Model Winsorized"),
           string.ci = "95% CI",
           string.p = "P-Value",
@@ -685,7 +721,7 @@ tab_model(hr_stress_model_win, hr_anxiety_model_win,
 ```{r}
 hr_stress_model_unconditional <- lmer(vasstress ~ 1 + hr_cb + hr_cw + (1| SID), REML = TRUE, data = data_long2)
 
-hr_stress_model1 <- lmer(vasstress ~ 1 + hr_cb + hr_cw + BDIScore + GAD7Score + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2)
+hr_stress_model1 <- lmer(vasstress ~ 1 + hr_cb + hr_cw + BDIScore + GAD7Score + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2, control = lmerControl(optimizer ="Nelder_Mead"))
 summary(hr_stress_model1)
 confint(hr_stress_model1)
 performance::check_convergence(hr_stress_model1) #converged okay
@@ -700,26 +736,6 @@ FElmer(hr_stress_model1)
 FEplot(hr_stress_model1)
 ICClmer(hr_stress_model1)
 REplot(hr_stress_model1)
-
-#These two models are equivalent
-hr_stress_model2 <- lmer(vasstress ~ 1 + hr_cb*hr_cw + hr_cw*BDIScore + hr_cw*GAD7Score + hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2)
-
-hr_stress_model2 <- lmer(vasstress ~ (1 + hr_cw)*(hr_cb + BDIScore + GAD7Score + ConditionLabel + Gender) + (1 + hr_cw | SID), REML = TRUE, data = data_long2)
-
-summary(hr_stress_model2)
-confint(hr_stress_model2)
-performance::check_convergence(hr_stress_model2) #converged okay
-performance::check_singularity(hr_stress_model2) #is not singular
-performance::r2(hr_stress_model2)
-performance::icc(hr_stress_model2)
-ggstatsplot::ggcoefstats(hr_stress_model2)
-performance::check_model(hr_stress_model2)
-performance::check_collinearity(hr_stress_model2)
-performance::model_performance(hr_stress_model2)
-FElmer(hr_stress_model2)
-FEplot(hr_stress_model2)
-ICClmer(hr_stress_model2)
-REplot(hr_stress_model2)
 ```
 
 ##HR Predicting Anxiety
@@ -737,36 +753,7 @@ performance::icc(hr_anxiety_model1)
 ggstatsplot::ggcoefstats(hr_anxiety_model1)
 performance::check_model(hr_anxiety_model1)
 performance::model_performance(hr_anxiety_model1)
-
-#These two models are equivalent
-hr_anxiety_model2 <- lmer(vasanxiety ~ 1 + hr_cw*hr_cb + hr_cw*BDIScore + hr_cw*GAD7Score +  hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2)
-
-hr_anxiety_model2 <- lmer(vasanxiety ~ (1 + hr_cw)*(hr_cb + BDIScore + GAD7Score +  ConditionLabel + Gender) + (1 + hr_cw | SID), REML = TRUE, data = data_long2)
-
-summary(hr_anxiety_model2)
-confint(hr_anxiety_model2)
-performance::check_convergence(hr_anxiety_model2) #converged okay
-performance::check_singularity(hr_anxiety_model2) #is not singular
-performance::r2(hr_anxiety_model2)
-performance::icc(hr_anxiety_model2)
-ggstatsplot::ggcoefstats(hr_anxiety_model2)
-performance::check_model(hr_anxiety_model2)
-performance::model_performance(hr_anxiety_model2)
 ```
-
-###Compare Models
-```{r}
-hr_anxiety_model_unconditional_compare <- lmer(vasanxiety ~ 1 + (1| SID), REML = TRUE, data = data_long2_compare)
-
-hr_anxiety_model1_compare <- lmer(vasanxiety ~ 1 + hr_cb + hr_cw + BDIScore + GAD7Score + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2_compare)
-
-#These two models are equivalent
-hr_anxiety_model2_compare <- lmer(vasanxiety ~ 1 + hr_cb*hr_cw + hr_cw*BDIScore + hr_cw*GAD7Score + hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2_compare)
-
-#Compare Models
-anova(hr_anxiety_model_unconditional_compare, hr_anxiety_model1_compare, hr_anxiety_model2_compare)
-```
-
 
 ##Create Table
 ```{r}
