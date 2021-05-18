@@ -410,7 +410,7 @@ duplicated <- duplicated(hr_stressanxiety_data[,c("SID", "wave", "variable", "va
 freq(duplicated)
 ```
 
-##Graph
+##Graph 1
 ```{r}
 #Plot Stress and HR
 hr_stressanxiety_graph <- ggplot(data=subset(hr_stressanxiety_data2), aes(x = wave, y = value, color = variable)) +
@@ -441,7 +441,6 @@ hr_stressanxiety_graph + gganimate::transition_reveal(as.numeric(wave))
 
 gganimate::anim_save("hr_stressanxiety_covariation.gif")
 ```
-
 
 ```{r}
 #Plot Stress and HR
@@ -504,13 +503,16 @@ gganimate::anim_save("hr_anxiety_covariation.gif")
 
 ##Difference by Time
 ```{r}
+set.seed(123)
+
 #HR
 ggstatsplot::ggwithinstats(
   data = data_long1,
   x = wave,
   y = hr,
-  title = "Heart Rate by Condition",
-  p.adjust.method = "bonferroni",
+  title = "Heart Rate by Wave",
+  xlab = "Wave",
+  ylab = "Heart Rate",
   pairwise.comparisons = TRUE
 )
 
@@ -519,8 +521,9 @@ ggstatsplot::ggwithinstats(
   data = data_long1,
   x = wave,
   y = vasstress,
-  title = "Stress by Condition",
-  p.adjust.method = "bonferroni",
+  title = "Stress by Wave",
+  xlab = "Wave",
+  ylab = "Stress",
   pairwise.comparisons = TRUE
 )
 
@@ -529,8 +532,9 @@ ggstatsplot::ggwithinstats(
   data = data_long1,
   x = wave,
   y = vasanxiety,
-  title = "Anxiety by Condition",
-  p.adjust.method = "bonferroni",
+  title = "Anxiety by Wave",
+  xlab = "Wave",
+  ylab = "Anxiety",
   pairwise.comparisons = TRUE
 )
 ```
