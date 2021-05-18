@@ -503,7 +503,7 @@ gganimate::anim_save("hr_anxiety_covariation.gif")
 
 ##Difference by Time
 ```{r}
-set.seed(123)
+set.seed(1876)
 
 #HR
 ggstatsplot::ggwithinstats(
