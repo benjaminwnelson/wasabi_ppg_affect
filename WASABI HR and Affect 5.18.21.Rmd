@@ -42,7 +42,7 @@ library(DHARMa) #model fit for mlm
 
 #Import Data
 ```{r}
-data1 <- data.table::fread("~/Desktop/Manuscripts/WASABI/WASABI Data.csv")
+data1 <- data.table::fread("~/Desktop/Manuscripts/WASABI HR and Affect/WASABI.csv")
 ```
 
 #Functions
@@ -116,9 +116,7 @@ data3 <- data2 %>%
     vasanxiety_4 = VAS4c,
     vasanxiety_5 = VAS5c,
     vasanxiety_6 = VAS6c,
-    vasanxiety_7 = VAS7c,
-    gadtotal = `GAD-7 Score`,
-    bditotal = `BDI Score`) %>% 
+    vasanxiety_7 = VAS7c) %>% 
   dplyr::select(
     SID,
     ConditionLabel,
@@ -145,15 +143,16 @@ data3 <- data2 %>%
     vasanxiety_4,
     vasanxiety_5,
     vasanxiety_6,
-    vasanxiety_7,
-    gadtotal,
-    bditotal)
+    vasanxiety_7)
+
+data3 <- data3 %>% 
+  dplyr::filter(ConditionLabel != "Pet")
 ```
 
 ##Turn Data Into Long
 ```{r}
 data_long1 <- data3 %>%  
-  pivot_longer(cols = c(-SID, -ConditionLabel, -Gender, -Age, -RaceEthnicity, -gadtotal, -bditotal), names_sep="_(?=[^_]+$)", names_to = c(".value", "wave"))
+  pivot_longer(cols = c(-SID, -ConditionLabel, -Gender, -Age, -RaceEthnicity), names_sep="_(?=[^_]+$)", names_to = c(".value", "wave"))
 ```
 
 ##Visualize Missing Data
@@ -163,8 +162,7 @@ data_long1 %>%
   naniar::vis_miss()
 
 #Count of missing data
-data_long1 %>% 
-  naniar::gg_miss_var(facet = "wave")
+naniar::gg_miss_var(data_long1, wave)
 ```
 
 ##Check Structure
@@ -172,12 +170,10 @@ data_long1 %>%
 str(data_long1)
 
 #Make Variables Factor
-data_long1[,1:5] <- lapply(data_long1[,1:5], as.factor)
-data_long1[,8] <- lapply(data_long1[,8], as.factor)
+data_long1[,1:6] <- lapply(data_long1[,1:6], as.factor)
 
 #Make Variables Numeric
-data_long1[,6:7] <- lapply(data_long1[,6:7], as.numeric)
-data_long1[,9:11] <- lapply(data_long1[,9:11], as.numeric)
+data_long1[,7:9] <- lapply(data_long1[,7:9], as.numeric)
 ```
 
 ##Check Distribution
@@ -190,18 +186,18 @@ describeBy(data_long1) #skew ok
 #Replace biologically implausible heart rate values with NA
 boxplot(data_long1$hr)
 
-data_long2 <- data_long1 %>% 
-  naniar::replace_with_na(replace = list(hr = 0))
+#data_long1 <- data_long1 %>% 
+#  naniar::replace_with_na(replace = list(hr = 0))
 ```
 
 #Descriptives
 ##Plot Variability in NSSI and SI
 ```{r}
 #HR Trajectory by Condition
-hr_trajectory <- ggplot(data=subset(data_long2), aes(x = wave, y = hr, color = ConditionLabel)) +
+hr_trajectory <- ggplot(data=subset(data_long1), aes(x = wave, y = hr, color = ConditionLabel)) +
   geom_line(aes(group = SID), alpha = .1) + #This fades the individual lines
   geom_point(position=position_jitter(h=0.05, w=0.05), shape = 21, alpha = 0.5, size = 1) +
-  stat_summary(data=subset(data_long2), aes(group=ConditionLabel), fun=mean, geom="smooth") + 
+  stat_summary(data=subset(data_long1), aes(group=ConditionLabel), fun=mean, geom="smooth") + 
   theme(axis.ticks = element_line(colour = "black"), 
     panel.grid.major = element_line(colour = "white"), 
     panel.grid.minor = element_line(colour = "white"), 
@@ -220,11 +216,11 @@ hr_trajectory <- ggplot(data=subset(data_long2), aes(x = wave, y = hr, color = C
 hr_trajectory
 
 #Stress Trajectory by Condition
-stress_trajectory <- ggplot(data=subset(data_long2), aes(x = wave, y = vasstress, color = ConditionLabel)) +
+stress_trajectory <- ggplot(data=subset(data_long1), aes(x = wave, y = vasstress, color = ConditionLabel)) +
   geom_line(aes(group = SID), alpha = .1) + #This fades the individual lines
   geom_point(position=position_jitter(h=0.05, w=0.05),
              shape = 21, alpha = 0.5, size = 1) +
-  stat_summary(data=subset(data_long2), aes(group=ConditionLabel), fun=mean, geom="smooth") + 
+  stat_summary(data=subset(data_long1), aes(group=ConditionLabel), fun=mean, geom="smooth") + 
   theme(axis.ticks = element_line(colour = "black"), 
     panel.grid.major = element_line(colour = "white"), 
     panel.grid.minor = element_line(colour = "white"), 
@@ -243,11 +239,11 @@ stress_trajectory <- ggplot(data=subset(data_long2), aes(x = wave, y = vasstress
 stress_trajectory
 
 #Anxiety Trajectory by Condition
-anxiety_trajectory <- ggplot(data=subset(data_long2), aes(x = wave, y = vasanxiety, color = ConditionLabel)) +
+anxiety_trajectory <- ggplot(data=subset(data_long1), aes(x = wave, y = vasanxiety, color = ConditionLabel)) +
   geom_line(aes(group = SID), alpha = .1) + #This fades the individual lines
   geom_point(position=position_jitter(h=0.05, w=0.05),
              shape = 21, alpha = 0.5, size = 1) +
-  stat_summary(data=subset(data_long2), aes(group=ConditionLabel), fun=mean, geom="smooth") + 
+  stat_summary(data=subset(data_long1), aes(group=ConditionLabel), fun=mean, geom="smooth") + 
   theme(axis.ticks = element_line(colour = "black"), 
     panel.grid.major = element_line(colour = "white"), 
     panel.grid.minor = element_line(colour = "white"), 
@@ -274,10 +270,10 @@ ggpubr::ggarrange(hr_trajectory, stress_trajectory, anxiety_trajectory,
 ##Plot
 ##Heart Rate
 ```{r}
-sumrepdat_hr <- Rmisc::summarySE(data_long2, measurevar = "hr",
+sumrepdat_hr <- Rmisc::summarySE(data_long1, measurevar = "hr",
                               groupvars=c("ConditionLabel", "wave"))
 
-hr_plot2 <- ggplot(data_long2, aes(x = wave, y = hr, fill = ConditionLabel)) +
+hr_plot2 <- ggplot(data_long1, aes(x = wave, y = hr, fill = ConditionLabel)) +
   PupillometryR::geom_flat_violin(aes(fill = ConditionLabel), position = position_nudge(x = .2, y = 0), adjust = 1.5, trim = FALSE, alpha = .5, colour = NA) +
   geom_point(aes(x = as.numeric(wave) - .15, y = hr, colour = ConditionLabel), position = position_jitter(width = .05), size = .25, shape = 20) +
   geom_boxplot(aes(x = wave, y = hr, fill = ConditionLabel), outlier.shape = NA, alpha = .5, width = .2, colour = "black") +
@@ -301,10 +297,10 @@ hr_plot2
 
 ###Stress
 ```{r}
-sumrepdat_stress <- Rmisc::summarySE(data_long2, measurevar = "vasstress",
+sumrepdat_stress <- Rmisc::summarySE(data_long1, measurevar = "vasstress",
                               groupvars=c("ConditionLabel", "wave"))
 
-stress_plot2 <- ggplot(data_long2, aes(x = wave, y = vasstress, fill = ConditionLabel)) +
+stress_plot2 <- ggplot(data_long1, aes(x = wave, y = vasstress, fill = ConditionLabel)) +
   PupillometryR::geom_flat_violin(aes(fill = ConditionLabel), position = position_nudge(x = .2, y = 0), adjust = 1.5, trim = FALSE, alpha = .5, colour = NA) +
   geom_point(aes(x = as.numeric(wave) - .15, y = vasstress, colour = ConditionLabel), position = position_jitter(width = .05), size = .25, shape = 20) +
   geom_boxplot(aes(x = wave, y = vasstress, fill = ConditionLabel), outlier.shape = NA, alpha = .5, width = .2, colour = "black") +
@@ -328,10 +324,10 @@ stress_plot2
 
 ##Anxiety
 ```{r}
-sumrepdat_anxiety <- Rmisc::summarySE(data_long2, measurevar = "vasanxiety",
+sumrepdat_anxiety <- Rmisc::summarySE(data_long1, measurevar = "vasanxiety",
                               groupvars=c("ConditionLabel", "wave"))
 
-anxiety_plot2 <- ggplot(data_long2, aes(x = wave, y = vasanxiety, fill = ConditionLabel)) +
+anxiety_plot2 <- ggplot(data_long1, aes(x = wave, y = vasanxiety, fill = ConditionLabel)) +
   PupillometryR::geom_flat_violin(aes(fill = ConditionLabel), position = position_nudge(x = .2, y = 0), adjust = 1.5, trim = FALSE, alpha = .5, colour = NA) +
   geom_point(aes(x = as.numeric(wave) - .15, y = vasanxiety, colour = ConditionLabel), position = position_jitter(width = .05), size = .25, shape = 20) +
   geom_boxplot(aes(x = wave, y = vasanxiety, fill = ConditionLabel), outlier.shape = NA, alpha = .5, width = .2, colour = "black") +
@@ -364,33 +360,33 @@ ggpubr::ggarrange(hr_plot2, stress_plot2, anxiety_plot2,
 #Covariation Figure
 ##Convert variables to Z-Score
 ```{r}
-data_long3 <- data_long2
-data_long3$hr_zscore <- scale(data_long3$hr)
-data_long3$stress_zscore <- scale(data_long3$vasstress)
-data_long3$anxiety_zscore <- scale(data_long3$vasanxiety)
-str(data_long3)
+data_long2 <- data_long1
+data_long2$hr_zscore <- scale(data_long2$hr)
+data_long2$stress_zscore <- scale(data_long2$vasstress)
+data_long2$anxiety_zscore <- scale(data_long2$vasanxiety)
+str(data_long2)
 ```
 
 ##Turn Data Into Long
 ```{r}
-hr_stress_data <- data_long3 %>%  
+#Stress Data
+hr_stress_data <- data_long2 %>%  
   pivot_longer(cols = c(hr_zscore, stress_zscore), names_to = "variable", values_to = "value")
 
 str(hr_stress_data)
 hr_stress_data$variable <- as.factor(hr_stress_data$variable)
 hr_stress_data$wave <- as.numeric(hr_stress_data$wave)
 
-hr_anxiety_data <- data_long3 %>%  
+#Anxiety Data
+hr_anxiety_data <- data_long2 %>%  
   pivot_longer(cols = c(hr_zscore, anxiety_zscore), names_to = "variable", values_to = "value")
 
 str(hr_anxiety_data)
 hr_anxiety_data$variable <- as.factor(hr_anxiety_data$variable)
 hr_anxiety_data$wave <- as.numeric(hr_anxiety_data$wave)
-```
 
-##Turn Data Into Long
-```{r}
-hr_stressanxiety_data <- data_long3 %>%  
+#Stress and Anxiety Data
+hr_stressanxiety_data <- data_long2 %>%  
   pivot_longer(cols = c(hr_zscore, stress_zscore, anxiety_zscore), names_to = "variable", values_to = "value")
 
 str(hr_stressanxiety_data)
@@ -506,13 +502,11 @@ hr_anxiety_graph + gganimate::transition_reveal(wave)
 gganimate::anim_save("hr_anxiety_covariation.gif")
 ```
 
-
-
 ##Difference by Time
 ```{r}
 #HR
-ggstatsplot::ggbetweenstats(
-  data = data_long2,
+ggstatsplot::ggwithinstats(
+  data = data_long1,
   x = wave,
   y = hr,
   title = "Heart Rate by Condition",
@@ -521,8 +515,8 @@ ggstatsplot::ggbetweenstats(
 )
 
 #Stress
-ggstatsplot::ggbetweenstats(
-  data = data_long2,
+ggstatsplot::ggwithinstats(
+  data = data_long1,
   x = wave,
   y = vasstress,
   title = "Stress by Condition",
@@ -531,9 +525,8 @@ ggstatsplot::ggbetweenstats(
 )
 
 #Anxiety
-#Stress
-ggstatsplot::ggbetweenstats(
-  data = data_long2,
+ggstatsplot::ggwithinstats(
+  data = data_long1,
   x = wave,
   y = vasanxiety,
   title = "Anxiety by Condition",
@@ -545,22 +538,16 @@ ggstatsplot::ggbetweenstats(
 #Analyses
 ##Create Between and Within Person Terms
 ```{r}
-data_long3 <- bmlm::isolate(data_long2, by = "SID",
+data_long2 <- bmlm::isolate(data_long1, by = "SID",
              value = c("hr", "vasstress", "vasanxiety"),
              which = "both")
 ```
 
 ##HR Predicting Stress
 ```{r}
-hr_stress_model_unconditional <- lmer(vasstress ~ 1 + hr_cb + hr_cw + (1| SID), REML = TRUE, data = data_long3)
+hr_stress_model_unconditional <- lmer(vasstress ~ 1 + hr_cb + hr_cw + (1| SID), REML = TRUE, data = data_long2)
 
-hr_stress_model1 <- lmer(vasstress ~ 1 + hr_cb + hr_cw*bditotal + hr_cw*gadtotal + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long3)
-
-#These two models are equivalent
-hr_stress_model2 <- lmer(vasstress ~ 1 + hr_cb + hr_cw*bditotal + hr_cw*gadtotal + hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long3, control = lmerControl(optimizer ="Nelder_Mead"))
-
-hr_stress_model2 <- lmer(vasstress ~ (1 + hr_cw)*(hr_cb + bditotal + gadtotal + ConditionLabel + Gender) + (1 + hr_cw | SID), REML = TRUE, data = data_long3)
-
+hr_stress_model1 <- lmer(vasstress ~ 1 + hr_cb + hr_cw + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2)
 summary(hr_stress_model1)
 confint(hr_stress_model1)
 performance::check_convergence(hr_stress_model1) #converged okay
@@ -575,33 +562,50 @@ FElmer(hr_stress_model1)
 FEplot(hr_stress_model1)
 ICClmer(hr_stress_model1)
 REplot(hr_stress_model1)
+
+#These two models are equivalent
+hr_stress_model2 <- lmer(vasstress ~ 1 + hr_cb*hr_cw + hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2)
+
+hr_stress_model2 <- lmer(vasstress ~ (1 + hr_cw)*(hr_cb + ConditionLabel + Gender) + (1 + hr_cw | SID), REML = TRUE, data = data_long2)
+
+summary(hr_stress_model2)
+confint(hr_stress_model2)
+performance::check_convergence(hr_stress_model2) #converged okay
+performance::check_singularity(hr_stress_model2) #is not singular
+performance::r2(hr_stress_model2)
+performance::icc(hr_stress_model2)
+ggstatsplot::ggcoefstats(hr_stress_model2)
+performance::check_model(hr_stress_model2)
+performance::check_collinearity(hr_stress_model2)
+performance::model_performance(hr_stress_model2)
+FElmer(hr_stress_model2)
+FEplot(hr_stress_model2)
+ICClmer(hr_stress_model2)
+REplot(hr_stress_model2)
 ```
 
 ###Compare Models
 ```{r}
-data_long3_compare <- na.omit(data_long3)
+data_long2_compare <- na.omit(data_long2)
 
-hr_stress_model_unconditional_compare <- lmer(vasstress ~ 1 + (1| SID), REML = TRUE, data = data_long3_compare)
+hr_stress_model_unconditional_compare <- lmer(vasstress ~ 1 + (1| SID), REML = TRUE, data = data_long2_compare)
 
-hr_stress_model1_compare <- lmer(vasstress ~ 1 + hr_cb + hr_cw*bditotal + hr_cw*gadtotal + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long3_compare)
+hr_stress_model1_compare <- lmer(vasstress ~ 1 + hr_cb + hr_cw + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2_compare)
 
 #These two models are equivalent
-hr_stress_model2_compare <- lmer(vasstress ~ 1 + hr_cb + hr_cw*bditotal + hr_cw*gadtotal + hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long3_compare, control = lmerControl(optimizer ="Nelder_Mead"))
+hr_stress_model2_compare <- lmer(vasstress ~ 1 + hr_cb*hr_cw + hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2_compare)
 
 #Compare Models
 anova(hr_stress_model_unconditional_compare, hr_stress_model1_compare, hr_stress_model2_compare)
 ```
 
+
+
 ##HR Predicting Anxiety
 ```{r}
-hr_anxiety_model_unconditional <- lmer(vasanxiety ~ 1 +  (1 | SID), REML = TRUE, data = data_long3)
+hr_anxiety_model_unconditional <- lmer(vasanxiety ~ 1 +  (1 | SID), REML = TRUE, data = data_long2)
 
-hr_anxiety_model1 <- lmer(vasanxiety ~ 1 + hr_cb + hr_cw*bditotal + hr_cw*gadtotal + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long3)
-
-#These two models are equivalent
-hr_anxiety_model2 <- lmer(vasanxiety ~ 1 + hr_cb + hr_cw*hr_cb + hr_cw*bditotal + hr_cw*gadtotal + hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long3)
-
-hr_anxiety_model2 <- lmer(vasanxiety ~ (1 + hr_cw)*(hr_cb + bditotal + gadtotal + ConditionLabel + Gender) + (1 + hr_cw | SID), REML = TRUE, data = data_long3)
+hr_anxiety_model1 <- lmer(vasanxiety ~ 1 + hr_cb + hr_cw + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2, control = lmerControl(optimizer ="Nelder_Mead"))
 
 summary(hr_anxiety_model1)
 confint(hr_anxiety_model1)
@@ -612,16 +616,31 @@ performance::icc(hr_anxiety_model1)
 ggstatsplot::ggcoefstats(hr_anxiety_model1)
 performance::check_model(hr_anxiety_model1)
 performance::model_performance(hr_anxiety_model1)
+
+#These two models are equivalent
+hr_anxiety_model2 <- lmer(vasanxiety ~ 1 + hr_cw*hr_cb +  hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2)
+
+hr_anxiety_model2 <- lmer(vasanxiety ~ (1 + hr_cw)*(hr_cb +  ConditionLabel + Gender) + (1 + hr_cw | SID), REML = TRUE, data = data_long2)
+
+summary(hr_anxiety_model2)
+confint(hr_anxiety_model2)
+performance::check_convergence(hr_anxiety_model2) #converged okay
+performance::check_singularity(hr_anxiety_model2) #is not singular
+performance::r2(hr_anxiety_model2)
+performance::icc(hr_anxiety_model2)
+ggstatsplot::ggcoefstats(hr_anxiety_model2)
+performance::check_model(hr_anxiety_model2)
+performance::model_performance(hr_anxiety_model2)
 ```
 
 ###Compare Models
 ```{r}
-hr_anxiety_model_unconditional_compare <- lmer(vasanxiety ~ 1 + (1| SID), REML = TRUE, data = data_long3_compare)
+hr_anxiety_model_unconditional_compare <- lmer(vasanxiety ~ 1 + (1| SID), REML = TRUE, data = data_long2_compare)
 
-hr_anxiety_model1_compare <- lmer(vasanxiety ~ 1 + hr_cb + hr_cw*bditotal + hr_cw*gadtotal + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long3_compare)
+hr_anxiety_model1_compare <- lmer(vasanxiety ~ 1 + hr_cb + hr_cw + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2_compare, control = lmerControl(optimizer ="Nelder_Mead"))
 
 #These two models are equivalent
-hr_anxiety_model2_compare <- lmer(vasanxiety ~ 1 + hr_cb + hr_cw*bditotal + hr_cw*gadtotal + hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long3_compare, control = lmerControl(optimizer ="Nelder_Mead"))
+hr_anxiety_model2_compare <- lmer(vasanxiety ~ 1 + hr_cb*hr_cw + hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2_compare)
 
 #Compare Models
 anova(hr_anxiety_model_unconditional_compare, hr_anxiety_model1_compare, hr_anxiety_model2_compare)
@@ -645,24 +664,24 @@ tab_model(hr_stress_model1, hr_anxiety_model1,
 #Sensitivity Analyses
 ##Winsorize
 ```{r}
-data_long3$hr_win <- DescTools::Winsorize(data_long3$hr, na.rm = TRUE)
-data_long3$vasstress_win <- DescTools::Winsorize(data_long3$vasstress, na.rm = TRUE)
-data_long3$vasanxiety_win <- DescTools::Winsorize(data_long3$vasanxiety, na.rm = TRUE)
-data_long3$gadtotal_win <- DescTools::Winsorize(data_long3$gadtotal, na.rm = TRUE)
-data_long3$bditotal_win <- DescTools::Winsorize(data_long3$bditotal, na.rm = TRUE)
+data_long2$hr_win <- DescTools::Winsorize(data_long2$hr, na.rm = TRUE)
+data_long2$vasstress_win <- DescTools::Winsorize(data_long2$vasstress, na.rm = TRUE)
+data_long2$vasanxiety_win <- DescTools::Winsorize(data_long2$vasanxiety, na.rm = TRUE)
+#data_long2$gadtotal_win <- DescTools::Winsorize(data_long2$gadtotal, na.rm = TRUE)
+#data_long2$bditotal_win <- DescTools::Winsorize(data_long2$bditotal, na.rm = TRUE)
 ```
 
 ##Analysis
 ###Create Between and Within Person Terms
 ```{r}
-data_long4 <- bmlm::isolate(data_long3, by = "SID",
+data_long3 <- bmlm::isolate(data_long2, by = "SID",
              value = c("hr_win", "vasstress_win", "vasanxiety_win"),
              which = "both")
 ```
 
 ##HR Predicting Stress
 ```{r}
-hr_stress_model_win <- lmer(vasstress ~ 1 + hr_win_cb + hr_win_cw*bditotal_win + hr_win_cw*gadtotal_win + ConditionLabel + Gender + (1 + hr_win_cw | SID), REML = TRUE, data = data_long4, control = lmerControl(optimizer ="Nelder_Mead"))
+hr_stress_model_win <- lmer(vasstress ~ 1 + hr_win_cb + hr_win_cw + ConditionLabel + Gender + (1 + hr_win_cw | SID), REML = TRUE, data = data_long3, control = lmerControl(optimizer ="Nelder_Mead"))
 summary(hr_stress_model_win)
 confint(hr_stress_model_win)
 performance::check_convergence(hr_stress_model_win) #converged okay
@@ -680,7 +699,7 @@ REplot(hr_stress_model_win)
 
 ##HR Predicting Anxiety
 ```{r}
-hr_anxiety_model_win <- lmer(vasanxiety ~ 1 + hr_win_cb + hr_win_cw*bditotal_win + hr_win_cw*gadtotal_win +  ConditionLabel + Gender + (1 + hr_win_cw | SID), REML = TRUE, data = data_long4, control = lmerControl(optimizer ="Nelder_Mead"))
+hr_anxiety_model_win <- lmer(vasanxiety ~ 1 + hr_win_cb + hr_win_cw +  ConditionLabel + Gender + (1 + hr_win_cw | SID), REML = TRUE, data = data_long3)
 summary(hr_anxiety_model_win)
 confint(hr_anxiety_model_win)
 performance::check_convergence(hr_anxiety_model_win) #converged okay
