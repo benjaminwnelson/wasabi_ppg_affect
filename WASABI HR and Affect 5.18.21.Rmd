@@ -116,7 +116,9 @@ data3 <- data2 %>%
     vasanxiety_4 = VAS4c,
     vasanxiety_5 = VAS5c,
     vasanxiety_6 = VAS6c,
-    vasanxiety_7 = VAS7c) %>% 
+    vasanxiety_7 = VAS7c,
+    bdi = 'BDI Score',
+    gad = 'GAD-7 Score') %>% 
   dplyr::select(
     SID,
     ConditionLabel,
@@ -143,7 +145,9 @@ data3 <- data2 %>%
     vasanxiety_4,
     vasanxiety_5,
     vasanxiety_6,
-    vasanxiety_7)
+    vasanxiety_7,
+    bdi,
+    gad)
 
 data3 <- data3 %>% 
   dplyr::filter(ConditionLabel != "Pet")
@@ -152,7 +156,19 @@ data3 <- data3 %>%
 ##Turn Data Into Long
 ```{r}
 data_long1 <- data3 %>%  
-  pivot_longer(cols = c(-SID, -ConditionLabel, -Gender, -Age, -RaceEthnicity), names_sep="_(?=[^_]+$)", names_to = c(".value", "wave"))
+  pivot_longer(cols = c(-SID, -ConditionLabel, -Gender, -Age, -RaceEthnicity, -bdi, -gad), names_sep="_(?=[^_]+$)", names_to = c(".value", "wave"))
+
+data_long1 <- data_long1 %>% 
+  dplyr::select(SID,
+                ConditionLabel,
+                Gender,
+                RaceEthnicity,
+                Age,
+                wave,
+                bdi, gad,
+                hr,
+                vasstress,
+                vasanxiety)
 ```
 
 ##Visualize Missing Data
@@ -173,7 +189,7 @@ str(data_long1)
 data_long1[,1:6] <- lapply(data_long1[,1:6], as.factor)
 
 #Make Variables Numeric
-data_long1[,7:9] <- lapply(data_long1[,7:9], as.numeric)
+data_long1[,7:11] <- lapply(data_long1[,7:11], as.numeric)
 ```
 
 ##Check Distribution
@@ -412,6 +428,10 @@ freq(duplicated)
 
 ##Graph 1
 ```{r}
+hr_stressanxiety_data2$variable <- plyr::revalue(hr_stressanxiety_data2$variable, c("hr_zscore" = "Heart Rate (Z-Score)"))
+hr_stressanxiety_data2$variable <- plyr::revalue(hr_stressanxiety_data2$variable, c("stress_zscore" = "Stress (Z-Score"))
+hr_stressanxiety_data2$variable <- plyr::revalue(hr_stressanxiety_data2$variable, c("anxiety_zscore" = "Anxiety (Z-Score"))
+
 #Plot Stress and HR
 hr_stressanxiety_graph <- ggplot(data=subset(hr_stressanxiety_data2), aes(x = wave, y = value, color = variable)) +
   #geom_line(aes(group = SID), alpha = .1) + #This fades the individual lines
@@ -547,11 +567,19 @@ data_long2 <- bmlm::isolate(data_long1, by = "SID",
              which = "both")
 ```
 
+##Change Condition Reference Level
+```{r}
+data_long2 <- data_long2 %>% 
+  mutate(ConditionLabel = relevel(ConditionLabel, 3))
+```
+
+
+
 ##HR Predicting Stress
 ```{r}
 hr_stress_model_unconditional <- lmer(vasstress ~ 1 + hr_cb + hr_cw + (1| SID), REML = TRUE, data = data_long2)
 
-hr_stress_model1 <- lmer(vasstress ~ 1 + hr_cb + hr_cw + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2)
+hr_stress_model1 <- lmer(vasstress ~ 1 + hr_cb + hr_cw + bdi + gad + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2)
 summary(hr_stress_model1)
 confint(hr_stress_model1)
 performance::check_convergence(hr_stress_model1) #converged okay
@@ -568,9 +596,9 @@ ICClmer(hr_stress_model1)
 REplot(hr_stress_model1)
 
 #These two models are equivalent
-hr_stress_model2 <- lmer(vasstress ~ 1 + hr_cb*hr_cw + hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2)
+hr_stress_model2 <- lmer(vasstress ~ 1 + hr_cb*hr_cw + hr_cw*bdi + hr_cw*gad + hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2)
 
-hr_stress_model2 <- lmer(vasstress ~ (1 + hr_cw)*(hr_cb + ConditionLabel + Gender) + (1 + hr_cw | SID), REML = TRUE, data = data_long2)
+hr_stress_model2 <- lmer(vasstress ~ (1 + hr_cw)*(hr_cb + bdi + gad + ConditionLabel + Gender) + (1 + hr_cw | SID), REML = TRUE, data = data_long2)
 
 summary(hr_stress_model2)
 confint(hr_stress_model2)
@@ -594,10 +622,10 @@ data_long2_compare <- na.omit(data_long2)
 
 hr_stress_model_unconditional_compare <- lmer(vasstress ~ 1 + (1| SID), REML = TRUE, data = data_long2_compare)
 
-hr_stress_model1_compare <- lmer(vasstress ~ 1 + hr_cb + hr_cw + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2_compare)
+hr_stress_model1_compare <- lmer(vasstress ~ 1 + hr_cb + hr_cw + bdi + gad + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2_compare)
 
 #These two models are equivalent
-hr_stress_model2_compare <- lmer(vasstress ~ 1 + hr_cb*hr_cw + hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2_compare)
+hr_stress_model2_compare <- lmer(vasstress ~ 1 + hr_cb*hr_cw + hr_cw*bdi + hr_cw*gad + hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2_compare)
 
 #Compare Models
 anova(hr_stress_model_unconditional_compare, hr_stress_model1_compare, hr_stress_model2_compare)
@@ -609,7 +637,7 @@ anova(hr_stress_model_unconditional_compare, hr_stress_model1_compare, hr_stress
 ```{r}
 hr_anxiety_model_unconditional <- lmer(vasanxiety ~ 1 +  (1 | SID), REML = TRUE, data = data_long2)
 
-hr_anxiety_model1 <- lmer(vasanxiety ~ 1 + hr_cb + hr_cw + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2, control = lmerControl(optimizer ="Nelder_Mead"))
+hr_anxiety_model1 <- lmer(vasanxiety ~ 1 + hr_cb + hr_cw + bdi + gad + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2)
 
 summary(hr_anxiety_model1)
 confint(hr_anxiety_model1)
@@ -622,9 +650,9 @@ performance::check_model(hr_anxiety_model1)
 performance::model_performance(hr_anxiety_model1)
 
 #These two models are equivalent
-hr_anxiety_model2 <- lmer(vasanxiety ~ 1 + hr_cw*hr_cb +  hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2)
+hr_anxiety_model2 <- lmer(vasanxiety ~ 1 + hr_cw*hr_cb + hr_cw*bdi + hr_cw*gad +  hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2, control = lmerControl(optimizer ="Nelder_Mead"))
 
-hr_anxiety_model2 <- lmer(vasanxiety ~ (1 + hr_cw)*(hr_cb +  ConditionLabel + Gender) + (1 + hr_cw | SID), REML = TRUE, data = data_long2)
+hr_anxiety_model2 <- lmer(vasanxiety ~ (1 + hr_cw)*(hr_cb + bdi + gad +  ConditionLabel + Gender) + (1 + hr_cw | SID), REML = TRUE, data = data_long2, control = lmerControl(optimizer ="Nelder_Mead"))
 
 summary(hr_anxiety_model2)
 confint(hr_anxiety_model2)
@@ -641,10 +669,10 @@ performance::model_performance(hr_anxiety_model2)
 ```{r}
 hr_anxiety_model_unconditional_compare <- lmer(vasanxiety ~ 1 + (1| SID), REML = TRUE, data = data_long2_compare)
 
-hr_anxiety_model1_compare <- lmer(vasanxiety ~ 1 + hr_cb + hr_cw + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2_compare, control = lmerControl(optimizer ="Nelder_Mead"))
+hr_anxiety_model1_compare <- lmer(vasanxiety ~ 1 + hr_cb + hr_cw + bdi + gad + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2_compare)
 
 #These two models are equivalent
-hr_anxiety_model2_compare <- lmer(vasanxiety ~ 1 + hr_cb*hr_cw + hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2_compare)
+hr_anxiety_model2_compare <- lmer(vasanxiety ~ 1 + hr_cb*hr_cw + hr_cw*bdi + hr_cw*gad + hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long2_compare, control = lmerControl(optimizer ="Nelder_Mead"))
 
 #Compare Models
 anova(hr_anxiety_model_unconditional_compare, hr_anxiety_model1_compare, hr_anxiety_model2_compare)
@@ -657,12 +685,13 @@ tab_model(hr_stress_model1, hr_anxiety_model1,
           dv.labels = c("Stress Model", "Anxiety Model"),
           string.ci = "95% CI",
           string.p = "P-Value",
+          show.std = TRUE,
           show.se = TRUE,
           string.se = "SE",
           show.fstat = TRUE,
           digits = 3,
           show.aic = TRUE,
-          file = "~/Desktop/Manuscripts/WASABI HR and Affect/Output.doc")
+          file = "~/Desktop/Manuscripts/WASABI HR and Affect/Tables/Output.doc")
 ```
 
 #Sensitivity Analyses
@@ -671,8 +700,8 @@ tab_model(hr_stress_model1, hr_anxiety_model1,
 data_long2$hr_win <- DescTools::Winsorize(data_long2$hr, na.rm = TRUE)
 data_long2$vasstress_win <- DescTools::Winsorize(data_long2$vasstress, na.rm = TRUE)
 data_long2$vasanxiety_win <- DescTools::Winsorize(data_long2$vasanxiety, na.rm = TRUE)
-#data_long2$gadtotal_win <- DescTools::Winsorize(data_long2$gadtotal, na.rm = TRUE)
-#data_long2$bditotal_win <- DescTools::Winsorize(data_long2$bditotal, na.rm = TRUE)
+data_long2$gad_win <- DescTools::Winsorize(data_long2$gad, na.rm = TRUE)
+data_long2$bdi_win <- DescTools::Winsorize(data_long2$bdi, na.rm = TRUE)
 ```
 
 ##Analysis
@@ -685,7 +714,7 @@ data_long3 <- bmlm::isolate(data_long2, by = "SID",
 
 ##HR Predicting Stress
 ```{r}
-hr_stress_model_win <- lmer(vasstress ~ 1 + hr_win_cb + hr_win_cw + ConditionLabel + Gender + (1 + hr_win_cw | SID), REML = TRUE, data = data_long3, control = lmerControl(optimizer ="Nelder_Mead"))
+hr_stress_model_win <- lmer(vasstress ~ 1 + hr_win_cb + hr_win_cw + bdi_win + gad_win + ConditionLabel + Gender + (1 + hr_win_cw | SID), REML = TRUE, data = data_long3, control = lmerControl(optimizer ="Nelder_Mead"))
 summary(hr_stress_model_win)
 confint(hr_stress_model_win)
 performance::check_convergence(hr_stress_model_win) #converged okay
@@ -703,7 +732,7 @@ REplot(hr_stress_model_win)
 
 ##HR Predicting Anxiety
 ```{r}
-hr_anxiety_model_win <- lmer(vasanxiety ~ 1 + hr_win_cb + hr_win_cw +  ConditionLabel + Gender + (1 + hr_win_cw | SID), REML = TRUE, data = data_long3)
+hr_anxiety_model_win <- lmer(vasanxiety ~ 1 + hr_win_cb + hr_win_cw + bdi_win + gad_win + ConditionLabel + Gender + (1 + hr_win_cw | SID), REML = TRUE, data = data_long3, control = lmerControl(optimizer ="Nelder_Mead"))
 summary(hr_anxiety_model_win)
 confint(hr_anxiety_model_win)
 performance::check_convergence(hr_anxiety_model_win) #converged okay
@@ -722,11 +751,17 @@ tab_model(hr_stress_model_win, hr_anxiety_model_win,
           string.ci = "95% CI",
           string.p = "P-Value",
           show.se = TRUE,
+          show.std = TRUE,
           string.se = "SE",
           show.fstat = TRUE,
           digits = 3,
           show.aic = TRUE,
-          file = "~/Desktop/Manuscripts/WASABI HR and Affect/Output_Winsorized.doc")
+          file = "~/Desktop/Manuscripts/WASABI HR and Affect/Tables/Output_Winsorized.doc")
+```
+
+#Association Between BDI and GAD with HR
+```{r}
+
 ```
 
 
