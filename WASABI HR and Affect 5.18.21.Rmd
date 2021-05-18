@@ -1,0 +1,714 @@
+---
+title: "WASABI HR and Affect"
+output:
+  html_document: default
+  pdf_document: default
+editor_options:
+  chunk_output_type: console
+---
+
+#Set WD
+```{r}
+setwd("~/Desktop/Manuscripts/WASABI HR and Affect")
+```
+
+#Load Packages
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(tidyr)
+library(tidylog)
+library(ggplot2)
+library(dplyr)
+library(psych)
+library(lubridate)
+library(summarytools)
+library(styler)
+library(readr)
+library(janitor)
+library(lubridate)
+
+library(lme4) #for estimating multilevel models
+library(lmerTest) #for p-values added to lme4 output
+library(texreg) #for better outputs
+library(effects) #for visualizing multilevel model effects
+library(sjstats) #might have to manually add
+library(sjPlot) #Print results
+library(sjlabelled) #Allows for custom printed results
+library(sjmisc)
+library(r2mlm)
+library(merTools)
+library(DHARMa) #model fit for mlm
+```
+
+#Import Data
+```{r}
+data1 <- data.table::fread("~/Desktop/Manuscripts/WASABI/WASABI Data.csv")
+```
+
+#Functions
+```{r}
+# Simple function for computing ICC from lmer() output. This will tell you how much variance subjects are taking in the model
+ICClmer <- function(out) {
+ data.frame(VarCorr(out)) %>% 
+  dplyr::rename(variance=vcov, sd=sdcor, re=var1) %>%  
+  mutate_all(function(x) ifelse(is.na(x), '', x)) %>%
+  data.frame %>% 
+  knitr::kable(digits=3) %>% 
+  kableExtra::kable_styling()
+}
+
+# Simple function for showing the fixed effects output from lmer() output
+FElmer <- function(out) {
+coef(summary(out)) %>% 
+  knitr::kable(digits=3) %>% 
+  kableExtra::kable_styling()
+}
+
+# Simple function for plotting the fixed effects coefficients form an lmer() output
+FEplot <- function(out) {
+  feEx <- FEsim(out, 1000)
+  library(ggplot2)
+  ggplot(feEx[feEx$term!= "(Intercept)", ]) + 
+    aes(x = term, ymin = median - 1.96 * sd, 
+        ymax = median + 1.96 * sd, y = median) + 
+    geom_pointrange() + 
+    geom_hline(yintercept = 0, size = I(1.1), color = I("red")) + 
+    coord_flip() + 
+    theme_bw() + labs(title = "Coefficient Plot of Model", 
+                      x = "Median Effect Estimate", y = paste(out@call$formula[[2]]))
+}
+
+# Simple function for plotting the random effects from lmer() output
+REplot <- function(out) {
+  plotREsim(REsim(out, n.sim = 1000))  +
+  ggtitle('Plot of Random Effects', subtitle = 'Interval Estimates') 
+}
+
+```
+
+#Data Cleaning
+##Remove Flagged Cases
+```{r}
+data2 <- data1 %>% 
+  dplyr::filter(Flagged != 1)
+```
+
+##Rename Variables to Convert to Long Format
+```{r}
+data3 <- data2 %>% 
+  rename(hr_1 = HR1,
+    hr_2 = HR2,
+    hr_3 = HR3,
+    hr_4 = HR4,
+    hr_5 = HR5,
+    hr_6 = HR6,
+    hr_7 = HR7,
+    vasstress_1 = VAS1b,
+    vasstress_2 = VAS2b,
+    vasstress_3 = VAS3b,
+    vasstress_4 = VAS4b,
+    vasstress_5 = VAS5b,
+    vasstress_6 = VAS6b,
+    vasstress_7 = VAS7b,
+    vasanxiety_1 = VAS1c,
+    vasanxiety_2 = VAS2c,
+    vasanxiety_3 = VAS3c,
+    vasanxiety_4 = VAS4c,
+    vasanxiety_5 = VAS5c,
+    vasanxiety_6 = VAS6c,
+    vasanxiety_7 = VAS7c,
+    gadtotal = `GAD-7 Score`,
+    bditotal = `BDI Score`) %>% 
+  dplyr::select(
+    SID,
+    ConditionLabel,
+    Gender,
+    RaceEthnicity,
+    Age,
+    hr_1,
+    hr_2,
+    hr_3,
+    hr_4,
+    hr_5,
+    hr_6,
+    hr_7,
+    vasstress_1,
+    vasstress_2,
+    vasstress_3,
+    vasstress_4,
+    vasstress_5,
+    vasstress_6,
+    vasstress_7,
+    vasanxiety_1,
+    vasanxiety_2,
+    vasanxiety_3,
+    vasanxiety_4,
+    vasanxiety_5,
+    vasanxiety_6,
+    vasanxiety_7,
+    gadtotal,
+    bditotal)
+```
+
+##Turn Data Into Long
+```{r}
+data_long1 <- data3 %>%  
+  pivot_longer(cols = c(-SID, -ConditionLabel, -Gender, -Age, -RaceEthnicity, -gadtotal, -bditotal), names_sep="_(?=[^_]+$)", names_to = c(".value", "wave"))
+```
+
+##Visualize Missing Data
+```{r}
+#Overall missing data
+data_long1 %>% 
+  naniar::vis_miss()
+
+#Count of missing data
+data_long1 %>% 
+  naniar::gg_miss_var(facet = "wave")
+```
+
+##Check Structure
+```{r}
+str(data_long1)
+
+#Make Variables Factor
+data_long1[,1:5] <- lapply(data_long1[,1:5], as.factor)
+data_long1[,8] <- lapply(data_long1[,8], as.factor)
+
+#Make Variables Numeric
+data_long1[,6:7] <- lapply(data_long1[,6:7], as.numeric)
+data_long1[,9:11] <- lapply(data_long1[,9:11], as.numeric)
+```
+
+##Check Distribution
+```{r}
+describeBy(data_long1) #skew ok
+```
+
+##Check Outliers
+```{r}
+#Replace biologically implausible heart rate values with NA
+boxplot(data_long1$hr)
+
+data_long2 <- data_long1 %>% 
+  naniar::replace_with_na(replace = list(hr = 0))
+```
+
+#Descriptives
+##Plot Variability in NSSI and SI
+```{r}
+#HR Trajectory by Condition
+hr_trajectory <- ggplot(data=subset(data_long2), aes(x = wave, y = hr, color = ConditionLabel)) +
+  geom_line(aes(group = SID), alpha = .1) + #This fades the individual lines
+  geom_point(position=position_jitter(h=0.05, w=0.05), shape = 21, alpha = 0.5, size = 1) +
+  stat_summary(data=subset(data_long2), aes(group=ConditionLabel), fun=mean, geom="smooth") + 
+  theme(axis.ticks = element_line(colour = "black"), 
+    panel.grid.major = element_line(colour = "white"), 
+    panel.grid.minor = element_line(colour = "white"), 
+    axis.title = element_text(size = 10), 
+    axis.text = element_text(size = 10, colour = "black"), 
+    axis.text.x = element_text(colour = "black"), 
+    axis.text.y = element_text(colour = "black"), 
+    plot.title = element_text(size = 10), 
+    legend.text = element_text(size = 10), 
+    legend.title = element_text(size = 10), 
+    panel.background = element_rect(fill = "white"), 
+    legend.key = element_rect(fill = "white"), 
+    legend.background = element_rect(fill = "white")) +
+  labs(title = "Heart Rate Trajectory by Condition", x = "Time", y = "Heart Rate", colour = "Condition")
+
+hr_trajectory
+
+#Stress Trajectory by Condition
+stress_trajectory <- ggplot(data=subset(data_long2), aes(x = wave, y = vasstress, color = ConditionLabel)) +
+  geom_line(aes(group = SID), alpha = .1) + #This fades the individual lines
+  geom_point(position=position_jitter(h=0.05, w=0.05),
+             shape = 21, alpha = 0.5, size = 1) +
+  stat_summary(data=subset(data_long2), aes(group=ConditionLabel), fun=mean, geom="smooth") + 
+  theme(axis.ticks = element_line(colour = "black"), 
+    panel.grid.major = element_line(colour = "white"), 
+    panel.grid.minor = element_line(colour = "white"), 
+    axis.title = element_text(size = 10), 
+    axis.text = element_text(size = 10, colour = "black"), 
+    axis.text.x = element_text(colour = "black"), 
+    axis.text.y = element_text(colour = "black"), 
+    plot.title = element_text(size = 10), 
+    legend.text = element_text(size = 10), 
+    legend.title = element_text(size = 10), 
+    panel.background = element_rect(fill = "white"), 
+    legend.key = element_rect(fill = "white"), 
+    legend.background = element_rect(fill = "white")) +
+  labs(title = "Stress Trajectory by Condition", x = "Time", y = "Stress", colour = "Condition")
+
+stress_trajectory
+
+#Anxiety Trajectory by Condition
+anxiety_trajectory <- ggplot(data=subset(data_long2), aes(x = wave, y = vasanxiety, color = ConditionLabel)) +
+  geom_line(aes(group = SID), alpha = .1) + #This fades the individual lines
+  geom_point(position=position_jitter(h=0.05, w=0.05),
+             shape = 21, alpha = 0.5, size = 1) +
+  stat_summary(data=subset(data_long2), aes(group=ConditionLabel), fun=mean, geom="smooth") + 
+  theme(axis.ticks = element_line(colour = "black"), 
+    panel.grid.major = element_line(colour = "white"), 
+    panel.grid.minor = element_line(colour = "white"), 
+    axis.title = element_text(size = 10), 
+    axis.text = element_text(size = 10, colour = "black"), 
+    axis.text.x = element_text(colour = "black"), 
+    axis.text.y = element_text(colour = "black"), 
+    plot.title = element_text(size = 10), 
+    legend.text = element_text(size = 10), 
+    legend.title = element_text(size = 10), 
+    panel.background = element_rect(fill = "white"), 
+    legend.key = element_rect(fill = "white"), 
+    legend.background = element_rect(fill = "white")) +
+  labs(title = "Anxiety Trajectory by Condition", x = "Time", y = "Anxiety", colour = "Condition")
+
+anxiety_trajectory
+
+#Merge Figures
+ggpubr::ggarrange(hr_trajectory, stress_trajectory, anxiety_trajectory, 
+                  labels = c("A", "B", "C"),
+                  ncol = 1, nrow = 3)
+```
+
+##Plot
+##Heart Rate
+```{r}
+sumrepdat_hr <- Rmisc::summarySE(data_long2, measurevar = "hr",
+                              groupvars=c("ConditionLabel", "wave"))
+
+hr_plot2 <- ggplot(data_long2, aes(x = wave, y = hr, fill = ConditionLabel)) +
+  PupillometryR::geom_flat_violin(aes(fill = ConditionLabel), position = position_nudge(x = .2, y = 0), adjust = 1.5, trim = FALSE, alpha = .5, colour = NA) +
+  geom_point(aes(x = as.numeric(wave) - .15, y = hr, colour = ConditionLabel), position = position_jitter(width = .05), size = .25, shape = 20) +
+  geom_boxplot(aes(x = wave, y = hr, fill = ConditionLabel), outlier.shape = NA, alpha = .5, width = .2, colour = "black") +
+  geom_line(data = sumrepdat_hr, aes(x = as.numeric(wave) + .1, y = hr, group = ConditionLabel, colour = ConditionLabel), linetype = 3) +
+  geom_point(data = sumrepdat_hr, aes(x = as.numeric(wave) + .1, y = hr, group = ConditionLabel, colour = ConditionLabel), shape = 18) +
+  geom_errorbar(data = sumrepdat_hr, aes(x = as.numeric(wave) + .1, y = hr, group = ConditionLabel, colour = ConditionLabel, ymin = hr - se, ymax = hr + se), width = .05) +
+  scale_colour_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Heart Rate Trajectory by Condition", x = "Time", y = "Heart Rate", colour = "Condition") +
+  guides(color=guide_legend("Condition"), fill = FALSE) +
+# coord_flip()+
+  theme(axis.line = element_line(linetype = "solid"), 
+    panel.grid.major = element_line(colour = "white"), 
+    panel.grid.minor = element_line(colour = "white"), 
+    panel.background = element_rect(fill = "white")) +
+  theme(legend.key = element_rect(fill = "white"), 
+    legend.background = element_rect(fill = "white"))
+
+hr_plot2
+```
+
+###Stress
+```{r}
+sumrepdat_stress <- Rmisc::summarySE(data_long2, measurevar = "vasstress",
+                              groupvars=c("ConditionLabel", "wave"))
+
+stress_plot2 <- ggplot(data_long2, aes(x = wave, y = vasstress, fill = ConditionLabel)) +
+  PupillometryR::geom_flat_violin(aes(fill = ConditionLabel), position = position_nudge(x = .2, y = 0), adjust = 1.5, trim = FALSE, alpha = .5, colour = NA) +
+  geom_point(aes(x = as.numeric(wave) - .15, y = vasstress, colour = ConditionLabel), position = position_jitter(width = .05), size = .25, shape = 20) +
+  geom_boxplot(aes(x = wave, y = vasstress, fill = ConditionLabel), outlier.shape = NA, alpha = .5, width = .2, colour = "black") +
+  geom_line(data = sumrepdat_stress, aes(x = as.numeric(wave) + .1, y = vasstress, group = ConditionLabel, colour = ConditionLabel), linetype = 3) +
+  geom_point(data = sumrepdat_stress, aes(x = as.numeric(wave) + .1, y = vasstress, group = ConditionLabel, colour = ConditionLabel), shape = 18) +
+  geom_errorbar(data = sumrepdat_stress, aes(x = as.numeric(wave) + .1, y = vasstress, group = ConditionLabel, colour = ConditionLabel, ymin = vasstress - se, ymax = vasstress + se), width = .05) +
+  scale_colour_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Stress Trajectory by Condition", x = "Time", y = "Stress", colour = "Condition") +
+  guides(color=guide_legend("Condition"), fill = FALSE) +
+# coord_flip()+
+  theme(axis.line = element_line(linetype = "solid"), 
+    panel.grid.major = element_line(colour = "white"), 
+    panel.grid.minor = element_line(colour = "white"), 
+    panel.background = element_rect(fill = "white")) +
+  theme(legend.key = element_rect(fill = "white"), 
+    legend.background = element_rect(fill = "white"))
+
+stress_plot2
+```
+
+##Anxiety
+```{r}
+sumrepdat_anxiety <- Rmisc::summarySE(data_long2, measurevar = "vasanxiety",
+                              groupvars=c("ConditionLabel", "wave"))
+
+anxiety_plot2 <- ggplot(data_long2, aes(x = wave, y = vasanxiety, fill = ConditionLabel)) +
+  PupillometryR::geom_flat_violin(aes(fill = ConditionLabel), position = position_nudge(x = .2, y = 0), adjust = 1.5, trim = FALSE, alpha = .5, colour = NA) +
+  geom_point(aes(x = as.numeric(wave) - .15, y = vasanxiety, colour = ConditionLabel), position = position_jitter(width = .05), size = .25, shape = 20) +
+  geom_boxplot(aes(x = wave, y = vasanxiety, fill = ConditionLabel), outlier.shape = NA, alpha = .5, width = .2, colour = "black") +
+  geom_line(data = sumrepdat_anxiety, aes(x = as.numeric(wave) + .1, y = vasanxiety, group = ConditionLabel, colour = ConditionLabel), linetype = 3) +
+  geom_point(data = sumrepdat_anxiety, aes(x = as.numeric(wave) + .1, y = vasanxiety, group = ConditionLabel, colour = ConditionLabel), shape = 18) +
+  geom_errorbar(data = sumrepdat_anxiety, aes(x = as.numeric(wave) + .1, y = vasanxiety, group = ConditionLabel, colour = ConditionLabel, ymin = vasanxiety - se, ymax = vasanxiety + se), width = .05) +
+  scale_colour_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Anxiety Trajectory by Condition", x = "Time", y = "Anxiety", colour = "Condition") +
+  guides(color=guide_legend("Condition"), fill = FALSE) +
+# coord_flip()+
+  theme(axis.line = element_line(linetype = "solid"), 
+    panel.grid.major = element_line(colour = "white"), 
+    panel.grid.minor = element_line(colour = "white"), 
+    panel.background = element_rect(fill = "white")) +
+  theme(legend.key = element_rect(fill = "white"), 
+    legend.background = element_rect(fill = "white"))
+
+anxiety_plot2
+```
+
+##Figure
+```{r}
+ggpubr::ggarrange(hr_plot2, stress_plot2, anxiety_plot2, 
+                  labels = c("A", "B", "C"),
+                  ncol = 1, nrow = 3)
+```
+
+
+#Covariation Figure
+##Convert variables to Z-Score
+```{r}
+data_long3 <- data_long2
+data_long3$hr_zscore <- scale(data_long3$hr)
+data_long3$stress_zscore <- scale(data_long3$vasstress)
+data_long3$anxiety_zscore <- scale(data_long3$vasanxiety)
+str(data_long3)
+```
+
+##Turn Data Into Long
+```{r}
+hr_stress_data <- data_long3 %>%  
+  pivot_longer(cols = c(hr_zscore, stress_zscore), names_to = "variable", values_to = "value")
+
+str(hr_stress_data)
+hr_stress_data$variable <- as.factor(hr_stress_data$variable)
+hr_stress_data$wave <- as.numeric(hr_stress_data$wave)
+
+hr_anxiety_data <- data_long3 %>%  
+  pivot_longer(cols = c(hr_zscore, anxiety_zscore), names_to = "variable", values_to = "value")
+
+str(hr_anxiety_data)
+hr_anxiety_data$variable <- as.factor(hr_anxiety_data$variable)
+hr_anxiety_data$wave <- as.numeric(hr_anxiety_data$wave)
+```
+
+##Turn Data Into Long
+```{r}
+hr_stressanxiety_data <- data_long3 %>%  
+  pivot_longer(cols = c(hr_zscore, stress_zscore, anxiety_zscore), names_to = "variable", values_to = "value")
+
+str(hr_stressanxiety_data)
+hr_stress_data$variable <- as.factor(hr_stress_data$variable)
+hr_stress_data$wave <- as.numeric(hr_stress_data$wave)
+
+hr_stressanxiety_data2 <- hr_stressanxiety_data %>% 
+  dplyr::select(SID,
+                wave,
+                value,
+                variable)
+
+hr_stressanxiety_data2$variable <- as.factor(hr_stressanxiety_data2$variable)
+
+str(hr_stressanxiety_data2)
+
+hr_stress_data2 <- hr_stress_data %>% 
+  group_by(SID) %>% mutate(sample = seq_along(SID))
+
+duplicated <- duplicated(hr_stressanxiety_data[,c("SID", "wave", "variable", "value")])
+freq(duplicated)
+```
+
+##Graph
+```{r}
+#Plot Stress and HR
+hr_stressanxiety_graph <- ggplot(data=subset(hr_stressanxiety_data2), aes(x = wave, y = value, color = variable)) +
+  #geom_line(aes(group = SID), alpha = .1) + #This fades the individual lines
+  geom_line(aes(group = interaction(SID, variable)), alpha = .1) +
+  geom_point(position=position_jitter(h=0.05, w=0.05),
+             shape = 21, alpha = 0.5, size = 1) +
+  stat_summary(data=subset(hr_stressanxiety_data2), aes(group=variable), fun=mean, geom="smooth") + 
+  theme(axis.ticks = element_line(colour = "black"), 
+    panel.grid.major = element_line(colour = "white"), 
+    panel.grid.minor = element_line(colour = "white"), 
+    axis.title = element_text(size = 10), 
+    axis.text = element_text(size = 10, colour = "black"), 
+    axis.text.x = element_text(colour = "black"), 
+    axis.text.y = element_text(colour = "black"), 
+    plot.title = element_text(size = 10), 
+    legend.text = element_text(size = 10), 
+    legend.title = element_text(size = 10), 
+    panel.background = element_rect(fill = "white"), 
+    legend.key = element_rect(fill = "white"), 
+    legend.background = element_rect(fill = "white")) +
+  labs(title = "Covariation of Heart Rate, Stress, and Anxiety", x = "Wave", y = "Value (Z-Scored)", colour = "Variable")
+
+hr_stressanxiety_graph
+
+#Animate
+hr_stressanxiety_graph + gganimate::transition_reveal(as.numeric(wave))
+
+gganimate::anim_save("hr_stressanxiety_covariation.gif")
+```
+
+
+```{r}
+#Plot Stress and HR
+hr_stress_graph <- ggplot(data=subset(hr_stress_data), aes(x = wave, y = as.numeric(value), color = variable)) +
+  #geom_line(aes(group = SID), alpha = .1) + #This fades the individual lines
+  geom_line(aes(group = interaction(SID, variable)), alpha = .1) +
+  geom_point(position=position_jitter(h=0.05, w=0.05),
+             shape = 21, alpha = 0.5, size = 1) +
+  stat_summary(data=subset(hr_stress_data), aes(group=variable), fun=mean, geom="smooth") + 
+  theme(axis.ticks = element_line(colour = "black"), 
+    panel.grid.major = element_line(colour = "white"), 
+    panel.grid.minor = element_line(colour = "white"), 
+    axis.title = element_text(size = 10), 
+    axis.text = element_text(size = 10, colour = "black"), 
+    axis.text.x = element_text(colour = "black"), 
+    axis.text.y = element_text(colour = "black"), 
+    plot.title = element_text(size = 10), 
+    legend.text = element_text(size = 10), 
+    legend.title = element_text(size = 10), 
+    panel.background = element_rect(fill = "white"), 
+    legend.key = element_rect(fill = "white"), 
+    legend.background = element_rect(fill = "white")) +
+  labs(title = "Covariation of Heart Rate and Stress", x = "Wave", y = "Value (Z-Scored)", colour = "Variable")
+
+hr_stress_graph
+
+#Animate
+hr_stress_graph + gganimate::transition_reveal(wave)
+
+gganimate::anim_save("hr_stressanxiety_covariation.gif")
+
+#Plot Anxiety and HR
+hr_anxiety_graph <- ggplot(data=subset(hr_anxiety_data), aes(x = wave, y = value, color = variable)) +
+  #geom_line(aes(group = SID), alpha = .1) + #This fades the individual lines
+  geom_line(aes(group = interaction(SID, variable)), alpha = .1) +
+  geom_point(position=position_jitter(h=0.05, w=0.05), shape = 21, alpha = 0.1, size = 1) +
+  stat_summary(data=subset(hr_anxiety_data), aes(group=variable), fun=mean, geom="smooth", size = 2) + 
+  theme(axis.ticks = element_line(colour = "black"), 
+        panel.grid.major = element_line(colour = "white"), 
+        panel.grid.minor = element_line(colour = "white"), 
+        axis.title = element_text(size = 10), 
+        axis.text = element_text(size = 10, colour = "black"), 
+        axis.text.x = element_text(colour = "black"), 
+        axis.text.y = element_text(colour = "black"), 
+        plot.title = element_text(size = 10), 
+        legend.text = element_text(size = 10), 
+        legend.title = element_text(size = 10), 
+        panel.background = element_rect(fill = "white"), 
+        legend.key = element_rect(fill = "white"), 
+        legend.background = element_rect(fill = "white")) +
+  labs(title = "Covariation of Heart Rate and Anxiety", x = "Wave", y = "Value (Z-Scored)", colour = "Variable")
+
+hr_anxiety_graph
+
+#Animate
+hr_anxiety_graph + gganimate::transition_reveal(wave)
+
+gganimate::anim_save("hr_anxiety_covariation.gif")
+```
+
+
+
+##Difference by Time
+```{r}
+#HR
+ggstatsplot::ggbetweenstats(
+  data = data_long2,
+  x = wave,
+  y = hr,
+  title = "Heart Rate by Condition",
+  p.adjust.method = "bonferroni",
+  pairwise.comparisons = TRUE
+)
+
+#Stress
+ggstatsplot::ggbetweenstats(
+  data = data_long2,
+  x = wave,
+  y = vasstress,
+  title = "Stress by Condition",
+  p.adjust.method = "bonferroni",
+  pairwise.comparisons = TRUE
+)
+
+#Anxiety
+#Stress
+ggstatsplot::ggbetweenstats(
+  data = data_long2,
+  x = wave,
+  y = vasanxiety,
+  title = "Anxiety by Condition",
+  p.adjust.method = "bonferroni",
+  pairwise.comparisons = TRUE
+)
+```
+
+#Analyses
+##Create Between and Within Person Terms
+```{r}
+data_long3 <- bmlm::isolate(data_long2, by = "SID",
+             value = c("hr", "vasstress", "vasanxiety"),
+             which = "both")
+```
+
+##HR Predicting Stress
+```{r}
+hr_stress_model_unconditional <- lmer(vasstress ~ 1 + hr_cb + hr_cw + (1| SID), REML = TRUE, data = data_long3)
+
+hr_stress_model1 <- lmer(vasstress ~ 1 + hr_cb + hr_cw*bditotal + hr_cw*gadtotal + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long3)
+
+#These two models are equivalent
+hr_stress_model2 <- lmer(vasstress ~ 1 + hr_cb + hr_cw*bditotal + hr_cw*gadtotal + hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long3, control = lmerControl(optimizer ="Nelder_Mead"))
+
+hr_stress_model2 <- lmer(vasstress ~ (1 + hr_cw)*(hr_cb + bditotal + gadtotal + ConditionLabel + Gender) + (1 + hr_cw | SID), REML = TRUE, data = data_long3)
+
+summary(hr_stress_model1)
+confint(hr_stress_model1)
+performance::check_convergence(hr_stress_model1) #converged okay
+performance::check_singularity(hr_stress_model1) #is not singular
+performance::r2(hr_stress_model1)
+performance::icc(hr_stress_model1)
+ggstatsplot::ggcoefstats(hr_stress_model1)
+performance::check_model(hr_stress_model1)
+performance::check_collinearity(hr_stress_model1)
+performance::model_performance(hr_stress_model1)
+FElmer(hr_stress_model1)
+FEplot(hr_stress_model1)
+ICClmer(hr_stress_model1)
+REplot(hr_stress_model1)
+```
+
+###Compare Models
+```{r}
+data_long3_compare <- na.omit(data_long3)
+
+hr_stress_model_unconditional_compare <- lmer(vasstress ~ 1 + (1| SID), REML = TRUE, data = data_long3_compare)
+
+hr_stress_model1_compare <- lmer(vasstress ~ 1 + hr_cb + hr_cw*bditotal + hr_cw*gadtotal + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long3_compare)
+
+#These two models are equivalent
+hr_stress_model2_compare <- lmer(vasstress ~ 1 + hr_cb + hr_cw*bditotal + hr_cw*gadtotal + hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long3_compare, control = lmerControl(optimizer ="Nelder_Mead"))
+
+#Compare Models
+anova(hr_stress_model_unconditional_compare, hr_stress_model1_compare, hr_stress_model2_compare)
+```
+
+##HR Predicting Anxiety
+```{r}
+hr_anxiety_model_unconditional <- lmer(vasanxiety ~ 1 +  (1 | SID), REML = TRUE, data = data_long3)
+
+hr_anxiety_model1 <- lmer(vasanxiety ~ 1 + hr_cb + hr_cw*bditotal + hr_cw*gadtotal + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long3)
+
+#These two models are equivalent
+hr_anxiety_model2 <- lmer(vasanxiety ~ 1 + hr_cb + hr_cw*hr_cb + hr_cw*bditotal + hr_cw*gadtotal + hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long3)
+
+hr_anxiety_model2 <- lmer(vasanxiety ~ (1 + hr_cw)*(hr_cb + bditotal + gadtotal + ConditionLabel + Gender) + (1 + hr_cw | SID), REML = TRUE, data = data_long3)
+
+summary(hr_anxiety_model1)
+confint(hr_anxiety_model1)
+performance::check_convergence(hr_anxiety_model1) #converged okay
+performance::check_singularity(hr_anxiety_model1) #is not singular
+performance::r2(hr_anxiety_model1)
+performance::icc(hr_anxiety_model1)
+ggstatsplot::ggcoefstats(hr_anxiety_model1)
+performance::check_model(hr_anxiety_model1)
+performance::model_performance(hr_anxiety_model1)
+```
+
+###Compare Models
+```{r}
+hr_anxiety_model_unconditional_compare <- lmer(vasanxiety ~ 1 + (1| SID), REML = TRUE, data = data_long3_compare)
+
+hr_anxiety_model1_compare <- lmer(vasanxiety ~ 1 + hr_cb + hr_cw*bditotal + hr_cw*gadtotal + ConditionLabel + Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long3_compare)
+
+#These two models are equivalent
+hr_anxiety_model2_compare <- lmer(vasanxiety ~ 1 + hr_cb + hr_cw*bditotal + hr_cw*gadtotal + hr_cw*ConditionLabel + hr_cw*Gender + (1 + hr_cw | SID), REML = TRUE, data = data_long3_compare, control = lmerControl(optimizer ="Nelder_Mead"))
+
+#Compare Models
+anova(hr_anxiety_model_unconditional_compare, hr_anxiety_model1_compare, hr_anxiety_model2_compare)
+```
+
+
+##Create Table
+```{r}
+tab_model(hr_stress_model1, hr_anxiety_model1,
+          dv.labels = c("Stress Model", "Anxiety Model"),
+          string.ci = "95% CI",
+          string.p = "P-Value",
+          show.se = TRUE,
+          string.se = "SE",
+          show.fstat = TRUE,
+          digits = 3,
+          show.aic = TRUE,
+          file = "~/Desktop/Manuscripts/WASABI HR and Affect/Output.doc")
+```
+
+#Sensitivity Analyses
+##Winsorize
+```{r}
+data_long3$hr_win <- DescTools::Winsorize(data_long3$hr, na.rm = TRUE)
+data_long3$vasstress_win <- DescTools::Winsorize(data_long3$vasstress, na.rm = TRUE)
+data_long3$vasanxiety_win <- DescTools::Winsorize(data_long3$vasanxiety, na.rm = TRUE)
+data_long3$gadtotal_win <- DescTools::Winsorize(data_long3$gadtotal, na.rm = TRUE)
+data_long3$bditotal_win <- DescTools::Winsorize(data_long3$bditotal, na.rm = TRUE)
+```
+
+##Analysis
+###Create Between and Within Person Terms
+```{r}
+data_long4 <- bmlm::isolate(data_long3, by = "SID",
+             value = c("hr_win", "vasstress_win", "vasanxiety_win"),
+             which = "both")
+```
+
+##HR Predicting Stress
+```{r}
+hr_stress_model_win <- lmer(vasstress ~ 1 + hr_win_cb + hr_win_cw*bditotal_win + hr_win_cw*gadtotal_win + ConditionLabel + Gender + (1 + hr_win_cw | SID), REML = TRUE, data = data_long4, control = lmerControl(optimizer ="Nelder_Mead"))
+summary(hr_stress_model_win)
+confint(hr_stress_model_win)
+performance::check_convergence(hr_stress_model_win) #converged okay
+performance::check_singularity(hr_stress_model_win) #is not singular
+performance::r2(hr_stress_model_win)
+performance::icc(hr_stress_model_win)
+ggstatsplot::ggcoefstats(hr_stress_model_win)
+performance::check_model(hr_stress_model_win)
+performance::model_performance(hr_stress_model_win)
+FElmer(hr_stress_model_win)
+FEplot(hr_stress_model_win)
+ICClmer(hr_stress_model_win)
+REplot(hr_stress_model_win)
+```
+
+##HR Predicting Anxiety
+```{r}
+hr_anxiety_model_win <- lmer(vasanxiety ~ 1 + hr_win_cb + hr_win_cw*bditotal_win + hr_win_cw*gadtotal_win +  ConditionLabel + Gender + (1 + hr_win_cw | SID), REML = TRUE, data = data_long4, control = lmerControl(optimizer ="Nelder_Mead"))
+summary(hr_anxiety_model_win)
+confint(hr_anxiety_model_win)
+performance::check_convergence(hr_anxiety_model_win) #converged okay
+performance::check_singularity(hr_anxiety_model_win) #is not singular
+performance::r2(hr_anxiety_model_win)
+performance::icc(hr_anxiety_model_win)
+ggstatsplot::ggcoefstats(hr_anxiety_model_win)
+performance::check_model(hr_anxiety_model_win)
+performance::model_performance(hr_anxiety_model_win)
+```
+
+##Create Table
+```{r}
+tab_model(hr_stress_model_win, hr_anxiety_model_win,
+          dv.labels = c("Stress Model Winsorized", "Anxiety Model Winsorized"),
+          string.ci = "95% CI",
+          string.p = "P-Value",
+          show.se = TRUE,
+          string.se = "SE",
+          show.fstat = TRUE,
+          digits = 3,
+          show.aic = TRUE,
+          file = "~/Desktop/Manuscripts/WASABI HR and Affect/Output_Winsorized.doc")
+```
+
+
+
+
+
+
+
